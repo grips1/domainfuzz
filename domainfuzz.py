@@ -1,13 +1,17 @@
 #!/usr/bin/python3
 
 ### Tasks ###
+#@ Add https:// automatically to the beginning of the domain DONE
+#@    Some requests hang for too long, set a time limit for the requests. DONE
+# Where do I take this? Maybe I can just use a crunch-generated wordlist, add https:// and a .TLD and be done with it? 
 
-#    Test for domain registrar pages via page content and skip them.
-#    Add line to input length of fuzzing and prefix/suffix/bothfix (both at the same time)/prefix-then-suffix (do both separately) mode as CLI parameters.
-#    Some requests hang for too long, set a time limit for the requests.
+#    HIGHEST PRIORITY: Add line to input length of fuzzing and prefix/suffix/bothfix (both at the same time)/prefix-then-suffix (do both separately) mode as CLI parameters.
+	# HC's implementation of brute forcing is of a fixed length by default. ?l?l?l?l doesn't increment by itself, but rather uses the `--increment` flag. Assume a fixed length given by the user and implement --increment in the future...
+#    Test for domain registrar pages via page content and skip them. (Implement scraping, can use Web Scraping with Python for reference)
 #	 Seems like I'll need to make the character-adding feature a function rather than a loop, in order to implement variable length fuzzing
-#!	 No need to provide character optionality... just fuzz numbers and letters altogether
-# 	 python3 -c [fuzz length] -o [output filename] 
+# 	 Designed python3 -c [fuzz length] -o [output filename] [SCAN FOR PORTS? SCAN FOR VULNS? SCRAPE?]
+#	 Add vuln/port scanning with nmap/msf or should it be up to the user?
+
 import requests
 
 #!   import argparse
@@ -15,70 +19,69 @@ import requests
 
 alphabet = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z']
 numbers = ['0','1','2','3','4','5','6','7','8','9']
-tlds = ['.com', '.us', '.wtf','.org']
-tlds_index = 3 #array length for fuzz()
+tlds = ['.com', '.us', '.wtf']
 
-domains = ["hack"]
+domain_keywords = ["hack", "game"]
 
 new_word = ""
 
-def send_request(domain, fd):
+#def send_request(domain, fd):
+def send_request(domain, tld_index):
 	header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; rv:128.0) Gecko/20100101 Firefox/128.0'}
 	try:
-		print(domain)
-		request = requests.get(domain, timeout=0.5)
+		domain = "https://" + domain + tlds[tld_index]
+		print("TRYING:" + domain )
+		#0.2s for testing; increase later
+		request = requests.get(domain, timeout=0.2)
 	except:
+		print("\n~~~Doesn't Exist~~~\n")
 		return -1
 	else: 
 		if request.status_code == 200:
-			fd.write(domain + '\n')
+			#fd.write(domain + '\n')
 			print("\n############\n###FOUND!###\n############\n")
+		else:
+			print("\n\n!!!NONE-200!!! --> " + str(request.status_code) + "\n\n")
 
-def fuzz(domain, iteration, index, tld_index):
-	domain = "https://" + domain
-	if iteration == 0:
-		domain += alphabet[index]
-	elif iteration == 1:
-		domain += numbers[index]
-	# Top Level Domain loop logic
+def fuzz(domain, charset_identifier, recurse, tld_index):
+	if charset_identifier == 0:
+		for index in range(len(alphabet)):
+			temp_domain = domain + alphabet[index]
+			for rec in range(recurse):
+				recurse -= 1
+				fuzz(temp_domain, charset_identifier, recurse, tld_index)
+			send_request(temp_domain, tld_index)
 
-	domain += tlds[tld_index]
-	return domain
+	elif charset_identifier == 0:
+		for index in range(len(numbers)):
+			temp_domain = domain + numbers[index]
+			for rec in range(recurse):
+				recurse -= 1
+				fuzz(temp_domain, charset_identifier, recurse, tld_index) 
+			send_request(temp_domain, tld_index)
 
 def main():
-	fuzzcount = input("char # to fuzz: ")
-	fuzzcount = int(fuzzcount)
-	fd = open('fuzzed3', 'w')
-	for domain in domains:
-		while fuzzcount > 0:
-			fuzzcount_int = fuzzcount
-			i = 0
-			print("Starting alphabet fuzzing...")
-			while i < 26: #alphabet
-				loop_tld_index = 0
-				while loop_tld_index < 4:
-					new_word = fuzz(domain, 0, i, loop_tld_index)
-					if send_request(new_word, fd) == -1:
-						print("Nope...")
-					loop_tld_index += 1
-				i += 1
-			i = 0
-			print("Starting number fuzzing...")
-			while i < 10: #numbers
-				loop_tld_index = 0
-				while loop_tld_index < 4:
-					new_word = fuzz(domain, 1, i, loop_tld_index)
-					if send_request(new_word, fd) == -1:
-						print("Nope...")
-					loop_tld_index += 1 
-				i += 1
-			fuzzcount -= 1
-	fd.close()
+	recursion_count = input("Recursion count: ")
+	recursion_count = int(recursion_count)
+
+	for domain in domain_keywords:
+		print("Starting alphabet fuzzing...")
+		loop_tld_index = 0
+		while loop_tld_index < len(tlds):
+			new_word = fuzz(domain, 0, recursion_count, loop_tld_index)
+			loop_tld_index += 1
+
+		print("Starting number fuzzing...")
+		loop_tld_index = 0
+		while loop_tld_index < len(tlds):
+			new_word = fuzz(domain, 1, recursion_count, loop_tld_index)
+			loop_tld_index += 1 
+		print("\n\nFINISHED FOR KEYWORD " + domain + "!!!\n\n")
+	print("Finished scanning all given domains!")
 
 if __name__ == '__main__':
 	main()
 
 
-# Add https:// automatically to the beginning of the domain DONE
-# TODO -- Work on trailing fuzzing first, then implement both. 
+# TODO -- Work on trailing fuzzing first, then implement both. Implement ?l - ?l?l?l first, 
 #^ Need to add variable length fuzzing.
